@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 --]]
 
-local cjson = require('cjson')
 local resty_hmac = require('resty.hmac')
 local resty_sha256 = require('resty.sha256')
 local str = require('resty.string')
@@ -42,15 +41,15 @@ end
 local function get_derived_signing_key(keys, timestamp, region, service)
   local h_date = resty_hmac:new('AWS4' .. keys['secret_key'], resty_hmac.ALGOS.SHA256)
   h_date:update(get_iso8601_basic_short(timestamp))
-  k_date = h_date:final()
+  local k_date = h_date:final()
 
   local h_region = resty_hmac:new(k_date, resty_hmac.ALGOS.SHA256)
   h_region:update(region)
-  k_region = h_region:final()
+  local k_region = h_region:final()
 
   local h_service = resty_hmac:new(k_region, resty_hmac.ALGOS.SHA256)
   h_service:update(service)
-  k_service = h_service:final()
+  local k_service = h_service:final()
 
   local h = resty_hmac:new(k_service, resty_hmac.ALGOS.SHA256)
   h:update('aws4_request')
@@ -118,7 +117,7 @@ local function get_service_and_region(host)
     {'s3%-([a-z0-9-]+)%.amazonaws%.com', 's3', nil}
   }
 
-  for i,data in ipairs(patterns) do
+  for _,data in ipairs(patterns) do
     local region = host:match(data[1])
     if region ~= nil and data[3] == nil then
       return data[2], region
