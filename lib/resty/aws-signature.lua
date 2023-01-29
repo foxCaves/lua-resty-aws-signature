@@ -130,10 +130,12 @@ function INST:aws_set_headers(host, uri, opts)
   local timestamp = tonumber(ngx.time())
   local auth = get_authorization(self.creds, timestamp, host, uri, opts)
 
-  ngx.req.set_header('Authorization', auth)
-  ngx.req.set_header('Host', host)
-  ngx.req.set_header('x-amz-date', get_iso8601_basic(timestamp))
-  ngx.req.set_header('x-amz-content-sha256', get_sha256_digest(ngx.var.request_body))
+  local set_header_func = opts.set_header_func or ngx.req.set_header
+
+  set_header_func('Authorization', auth)
+  set_header_func('Host', host)
+  set_header_func('x-amz-date', get_iso8601_basic(timestamp))
+  set_header_func('x-amz-content-sha256', get_sha256_digest(ngx.var.request_body))
 end
 
 return _M
