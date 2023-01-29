@@ -18,9 +18,9 @@ local resty_hmac = require('resty.hmac')
 local resty_sha256 = require('resty.sha256')
 local str = require('resty.string')
 
-local _M = { _VERSION = '0.1.2' }
+local _M = { _VERSION = '0.2.0' }
 
-local function get_credentials ()
+local function get_credentials()
   local access_key = os.getenv('AWS_ACCESS_KEY_ID')
   local secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
 
@@ -129,19 +129,30 @@ local function get_service_and_region(host)
   return nil, nil
 end
 
-function _M.aws_set_headers(host, uri)
-  local creds = get_credentials()
+local INST = {}
+INST.__index = INST
+
+function _M.new(creds)
+  if not creds then
+    creds = get_credentials()
+  end
+  return setmetatable({
+    creds = creds
+  }, INST)
+end
+
+function INST:aws_set_headers(host, uri)
   local timestamp = tonumber(ngx.time())
   local service, region = get_service_and_region(host)
-  local auth = get_authorization(creds, timestamp, region, service, host, uri)
+  local auth = get_authorization(self.creds, timestamp, region, service, host, uri)
 
   ngx.req.set_header('Authorization', auth)
   ngx.req.set_header('Host', host)
   ngx.req.set_header('x-amz-date', get_iso8601_basic(timestamp))
 end
 
-function _M.s3_set_headers(host, uri)
-  _M.aws_set_headers(host, uri)
+function INST:s3_set_headers(host, uri)
+  self:aws_set_headers(host, uri)
   ngx.req.set_header('x-amz-content-sha256', get_sha256_digest(ngx.var.request_body))
 end
 
