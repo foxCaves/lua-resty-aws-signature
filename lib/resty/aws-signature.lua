@@ -141,8 +141,8 @@ function INST:aws_set_headers(host, uri, opts)
     body = ngx.var.request_body
   end
 
-  set_header_func('Authorization', auth)
-  set_header_func('Host', host)
+  set_header_func('authorization', auth)
+  set_header_func('host', host)
   set_header_func('x-amz-date', get_iso8601_basic(timestamp))
   set_header_func('x-amz-content-sha256', get_sha256_digest(body))
 end
