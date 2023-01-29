@@ -44,7 +44,7 @@ local function get_derived_signing_key(keys, timestamp, opts)
   local k_date = h_date:final()
 
   local h_region = resty_hmac:new(k_date, resty_hmac.ALGOS.SHA256)
-  h_region:update(region)
+  h_region:update(opts.region)
   local k_region = h_region:final()
 
   local h_service = resty_hmac:new(k_region, resty_hmac.ALGOS.SHA256)
@@ -111,25 +111,6 @@ local function get_authorization(keys, timestamp, host, uri, opts)
     .. ', SignedHeaders=' .. get_signed_headers(opts)
     .. ', Signature=' .. get_signature(derived_signing_key, string_to_sign, opts)
   return auth
-end
-
-local function get_service_and_region(host)
-  local patterns = {
-    {'s3.amazonaws.com', 's3', 'us-east-1'},
-    {'s3-external-1.amazonaws.com', 's3', 'us-east-1'},
-    {'s3%-([a-z0-9-]+)%.amazonaws%.com', 's3', nil}
-  }
-
-  for _,data in ipairs(patterns) do
-    local region = host:match(data[1])
-    if region ~= nil and data[3] == nil then
-      return data[2], region
-    elseif region ~= nil then
-      return data[2], data[3]
-    end
-  end
-
-  return nil, nil
 end
 
 local INST = {}
