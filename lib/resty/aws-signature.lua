@@ -74,7 +74,11 @@ local function get_sha256_digest(s)
 end
 
 local function get_hashed_canonical_request(timestamp, host, uri, opts)
-  local digest = get_sha256_digest(opts.use_request_body and ngx.var.request_body or '')
+  local body = opts.body
+  if body == nil then
+    body = ngx.var.request_body
+  end
+  local digest = get_sha256_digest(body)
   local canonical_request = ngx.var.request_method .. '\n'
     .. uri .. '\n'
     .. '\n'
