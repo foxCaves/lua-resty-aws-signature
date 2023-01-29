@@ -38,7 +38,7 @@ local function get_iso8601_basic_short(timestamp)
   return os.date('!%Y%m%d', timestamp)
 end
 
-local function get_derived_signing_key(keys, timestamp, region, service, opts)
+local function get_derived_signing_key(keys, timestamp, opts)
   local h_date = resty_hmac:new('AWS4' .. keys['secret_key'], resty_hmac.ALGOS.SHA256)
   h_date:update(get_iso8601_basic_short(timestamp))
   local k_date = h_date:final()
