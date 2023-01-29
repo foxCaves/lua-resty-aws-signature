@@ -38,8 +38,8 @@ local function get_iso8601_basic_short(timestamp)
   return os.date('!%Y%m%d', timestamp)
 end
 
-local function get_derived_signing_key(keys, timestamp, opts)
-  local h_date = resty_hmac:new('AWS4' .. keys['secret_key'], resty_hmac.ALGOS.SHA256)
+local function get_derived_signing_key(secret_key, timestamp, opts)
+  local h_date = resty_hmac:new('AWS4' .. secret_key, resty_hmac.ALGOS.SHA256)
   h_date:update(get_iso8601_basic_short(timestamp))
   local k_date = h_date:final()
 
@@ -108,11 +108,10 @@ local function get_signature(derived_signing_key, string_to_sign, opts)
   return h:final(nil, true)
 end
 
-local function get_authorization(keys, timestamp, host, path, query, opts)
-  local derived_signing_key = get_derived_signing_key(keys, timestamp, opts)
-  local string_to_sign = get_string_to_sign(timestamp,  host, path, query, opts)
+local function get_authorization(derived_signing_key, access_key, timestamp, host, path, query, opts)
+  local string_to_sign = get_string_to_sign(timestamp, host, path, query, opts)
   local auth = 'AWS4-HMAC-SHA256 '
-    .. 'Credential=' .. keys['access_key'] .. '/' .. get_cred_scope(timestamp, opts)
+    .. 'Credential=' .. access_key .. '/' .. get_cred_scope(timestamp, opts)
     .. ', SignedHeaders=' .. get_signed_headers(opts)
     .. ', Signature=' .. get_signature(derived_signing_key, string_to_sign, opts)
   return auth
@@ -126,13 +125,29 @@ function _M.new(creds)
     creds = get_credentials()
   end
   return setmetatable({
-    creds = creds
+    creds = creds,
+    key_cache = {},
+    key_cache_date = "",
   }, INST)
 end
 
 function INST:aws_set_headers(host, path, query, opts)
   local timestamp = tonumber(ngx.time())
-  local auth = get_authorization(self.creds, timestamp, host, path, query, opts)
+
+  local date = get_iso8601_basic_short(timestamp)
+  if self.key_cache_date ~= date then
+    self.key_cache = {}
+    self.key_cache_date = date
+  end
+
+  local key_cache_id = opts.region .. '/' .. opts.service
+  local derived_signing_key = self.key_cache[key_cache_id]
+  if not derived_signing_key then
+    derived_signing_key = get_derived_signing_key(self.creds.secret_key, timestamp, opts)
+    self.key_cache[key_cache_id] = derived_signing_key
+  end
+
+  local auth = get_authorization(derived_signing_key, self.creds.access_key, timestamp, host, path, query, opts)
 
   local set_header_func = opts.set_header_func or ngx.req.set_header
 
