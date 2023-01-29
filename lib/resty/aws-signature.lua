@@ -48,7 +48,7 @@ local function get_derived_signing_key(keys, timestamp, opts)
   local k_region = h_region:final()
 
   local h_service = resty_hmac:new(k_region, resty_hmac.ALGOS.SHA256)
-  h_service:update(service)
+  h_service:update(opts.service)
   local k_service = h_service:final()
 
   local h = resty_hmac:new(k_service, resty_hmac.ALGOS.SHA256)
