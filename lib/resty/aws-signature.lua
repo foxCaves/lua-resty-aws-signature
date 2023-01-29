@@ -56,10 +56,10 @@ local function get_derived_signing_key(keys, timestamp, region, service, opts)
   return h:final()
 end
 
-local function get_cred_scope(timestamp, region, service, opts)
+local function get_cred_scope(timestamp, opts)
   return get_iso8601_basic_short(timestamp)
-    .. '/' .. region
-    .. '/' .. service
+    .. '/' .. opts.region
+    .. '/' .. opts.service
     .. '/aws4_request'
 end
 
@@ -90,11 +90,11 @@ local function get_hashed_canonical_request(timestamp, host, uri, opts)
   return get_sha256_digest(canonical_request)
 end
 
-local function get_string_to_sign(timestamp, region, service, host, uri, opts)
+local function get_string_to_sign(timestamp, host, uri, opts)
   return 'AWS4-HMAC-SHA256\n'
     .. get_iso8601_basic(timestamp) .. '\n'
-    .. get_cred_scope(timestamp, region, service) .. '\n'
-    .. get_hashed_canonical_request(timestamp, host, uri)
+    .. get_cred_scope(timestamp, opts) .. '\n'
+    .. get_hashed_canonical_request(timestamp, host, uri, opts)
 end
 
 local function get_signature(derived_signing_key, string_to_sign, opts)
@@ -103,11 +103,11 @@ local function get_signature(derived_signing_key, string_to_sign, opts)
   return h:final(nil, true)
 end
 
-local function get_authorization(keys, timestamp, region, service, host, uri, opts)
-  local derived_signing_key = get_derived_signing_key(keys, timestamp, region, service, opts)
-  local string_to_sign = get_string_to_sign(timestamp, region, service, host, uri, opts)
+local function get_authorization(keys, timestamp, host, uri, opts)
+  local derived_signing_key = get_derived_signing_key(keys, timestamp, opts)
+  local string_to_sign = get_string_to_sign(timestamp,  host, uri, opts)
   local auth = 'AWS4-HMAC-SHA256 '
-    .. 'Credential=' .. keys['access_key'] .. '/' .. get_cred_scope(timestamp, region, service, opts)
+    .. 'Credential=' .. keys['access_key'] .. '/' .. get_cred_scope(timestamp, opts)
     .. ', SignedHeaders=' .. get_signed_headers(opts)
     .. ', Signature=' .. get_signature(derived_signing_key, string_to_sign, opts)
   return auth
@@ -146,8 +146,7 @@ end
 
 function INST:aws_set_headers(host, uri, opts)
   local timestamp = tonumber(ngx.time())
-  local service, region = get_service_and_region(host)
-  local auth = get_authorization(self.creds, timestamp, region, service, host, uri, opts)
+  local auth = get_authorization(self.creds, timestamp, host, uri, opts)
 
   ngx.req.set_header('Authorization', auth)
   ngx.req.set_header('Host', host)
