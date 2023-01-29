@@ -38,7 +38,7 @@ local function get_iso8601_basic_short(timestamp)
   return os.date('!%Y%m%d', timestamp)
 end
 
-local function get_derived_signing_key(keys, timestamp, region, service)
+local function get_derived_signing_key(keys, timestamp, region, service, opts)
   local h_date = resty_hmac:new('AWS4' .. keys['secret_key'], resty_hmac.ALGOS.SHA256)
   h_date:update(get_iso8601_basic_short(timestamp))
   local k_date = h_date:final()
@@ -56,15 +56,18 @@ local function get_derived_signing_key(keys, timestamp, region, service)
   return h:final()
 end
 
-local function get_cred_scope(timestamp, region, service)
+local function get_cred_scope(timestamp, region, service, opts)
   return get_iso8601_basic_short(timestamp)
     .. '/' .. region
     .. '/' .. service
     .. '/aws4_request'
 end
 
-local function get_signed_headers()
-  return 'host;x-amz-content-sha256;x-amz-date'
+local function get_signed_headers(opts)
+  if opts.use_request_body then
+    return 'host;x-amz-content-sha256;x-amz-date'
+  end
+  return 'host;x-amz-date'
 end
 
 local function get_sha256_digest(s)
@@ -73,8 +76,8 @@ local function get_sha256_digest(s)
   return str.to_hex(h:final())
 end
 
-local function get_hashed_canonical_request(timestamp, host, uri)
-  local digest = get_sha256_digest(ngx.var.request_body)
+local function get_hashed_canonical_request(timestamp, host, uri, opts)
+  local digest = get_sha256_digest(opts.use_request_body and ngx.var.request_body or '')
   local canonical_request = ngx.var.request_method .. '\n'
     .. uri .. '\n'
     .. '\n'
@@ -87,26 +90,26 @@ local function get_hashed_canonical_request(timestamp, host, uri)
   return get_sha256_digest(canonical_request)
 end
 
-local function get_string_to_sign(timestamp, region, service, host, uri)
+local function get_string_to_sign(timestamp, region, service, host, uri, opts)
   return 'AWS4-HMAC-SHA256\n'
     .. get_iso8601_basic(timestamp) .. '\n'
     .. get_cred_scope(timestamp, region, service) .. '\n'
     .. get_hashed_canonical_request(timestamp, host, uri)
 end
 
-local function get_signature(derived_signing_key, string_to_sign)
+local function get_signature(derived_signing_key, string_to_sign, opts)
   local h = resty_hmac:new(derived_signing_key, resty_hmac.ALGOS.SHA256)
   h:update(string_to_sign)
   return h:final(nil, true)
 end
 
-local function get_authorization(keys, timestamp, region, service, host, uri)
-  local derived_signing_key = get_derived_signing_key(keys, timestamp, region, service)
-  local string_to_sign = get_string_to_sign(timestamp, region, service, host, uri)
+local function get_authorization(keys, timestamp, region, service, host, uri, opts)
+  local derived_signing_key = get_derived_signing_key(keys, timestamp, region, service, opts)
+  local string_to_sign = get_string_to_sign(timestamp, region, service, host, uri, opts)
   local auth = 'AWS4-HMAC-SHA256 '
-    .. 'Credential=' .. keys['access_key'] .. '/' .. get_cred_scope(timestamp, region, service)
-    .. ', SignedHeaders=' .. get_signed_headers()
-    .. ', Signature=' .. get_signature(derived_signing_key, string_to_sign)
+    .. 'Credential=' .. keys['access_key'] .. '/' .. get_cred_scope(timestamp, region, service, opts)
+    .. ', SignedHeaders=' .. get_signed_headers(opts)
+    .. ', Signature=' .. get_signature(derived_signing_key, string_to_sign, opts)
   return auth
 end
 
@@ -141,18 +144,14 @@ function _M.new(creds)
   }, INST)
 end
 
-function INST:aws_set_headers(host, uri)
+function INST:aws_set_headers(host, uri, opts)
   local timestamp = tonumber(ngx.time())
   local service, region = get_service_and_region(host)
-  local auth = get_authorization(self.creds, timestamp, region, service, host, uri)
+  local auth = get_authorization(self.creds, timestamp, region, service, host, uri, opts)
 
   ngx.req.set_header('Authorization', auth)
   ngx.req.set_header('Host', host)
   ngx.req.set_header('x-amz-date', get_iso8601_basic(timestamp))
-end
-
-function INST:s3_set_headers(host, uri)
-  self:aws_set_headers(host, uri)
   ngx.req.set_header('x-amz-content-sha256', get_sha256_digest(ngx.var.request_body))
 end
 
