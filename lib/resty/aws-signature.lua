@@ -73,7 +73,7 @@ local function get_sha256_digest(s)
   return str.to_hex(h:final())
 end
 
-local function get_hashed_canonical_request(timestamp, host, uri, opts)
+local function get_hashed_canonical_request(timestamp, host, path, query, opts)
   local body = opts.body
   if body == nil then
     body = ngx.var.request_body
@@ -84,8 +84,8 @@ local function get_hashed_canonical_request(timestamp, host, uri, opts)
   end
   local digest = get_sha256_digest(body)
   local canonical_request = method .. '\n'
-    .. uri .. '\n'
-    .. '\n'
+    .. path .. '\n'
+    .. query .. '\n'
     .. 'host:' .. host .. '\n'
     .. 'x-amz-content-sha256:' .. digest .. '\n'
     .. 'x-amz-date:' .. get_iso8601_basic(timestamp) .. '\n'
@@ -95,11 +95,11 @@ local function get_hashed_canonical_request(timestamp, host, uri, opts)
   return get_sha256_digest(canonical_request)
 end
 
-local function get_string_to_sign(timestamp, host, uri, opts)
+local function get_string_to_sign(timestamp, host, path, query, opts)
   return 'AWS4-HMAC-SHA256\n'
     .. get_iso8601_basic(timestamp) .. '\n'
     .. get_cred_scope(timestamp, opts) .. '\n'
-    .. get_hashed_canonical_request(timestamp, host, uri, opts)
+    .. get_hashed_canonical_request(timestamp, host, path, query, opts)
 end
 
 local function get_signature(derived_signing_key, string_to_sign, opts)
@@ -108,9 +108,9 @@ local function get_signature(derived_signing_key, string_to_sign, opts)
   return h:final(nil, true)
 end
 
-local function get_authorization(keys, timestamp, host, uri, opts)
+local function get_authorization(keys, timestamp, host, path, query, opts)
   local derived_signing_key = get_derived_signing_key(keys, timestamp, opts)
-  local string_to_sign = get_string_to_sign(timestamp,  host, uri, opts)
+  local string_to_sign = get_string_to_sign(timestamp,  host, path, query, opts)
   local auth = 'AWS4-HMAC-SHA256 '
     .. 'Credential=' .. keys['access_key'] .. '/' .. get_cred_scope(timestamp, opts)
     .. ', SignedHeaders=' .. get_signed_headers(opts)
@@ -130,9 +130,9 @@ function _M.new(creds)
   }, INST)
 end
 
-function INST:aws_set_headers(host, uri, opts)
+function INST:aws_set_headers(host, path, query, opts)
   local timestamp = tonumber(ngx.time())
-  local auth = get_authorization(self.creds, timestamp, host, uri, opts)
+  local auth = get_authorization(self.creds, timestamp, host, path, query, opts)
 
   local set_header_func = opts.set_header_func or ngx.req.set_header
 
