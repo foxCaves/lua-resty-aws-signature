@@ -64,10 +64,7 @@ local function get_cred_scope(timestamp, opts)
 end
 
 local function get_signed_headers(opts)
-  if opts.use_request_body then
-    return 'host;x-amz-content-sha256;x-amz-date'
-  end
-  return 'host;x-amz-date'
+  return 'host;x-amz-content-sha256;x-amz-date'
 end
 
 local function get_sha256_digest(s)
@@ -85,7 +82,7 @@ local function get_hashed_canonical_request(timestamp, host, uri, opts)
     .. 'x-amz-content-sha256:' .. digest .. '\n'
     .. 'x-amz-date:' .. get_iso8601_basic(timestamp) .. '\n'
     .. '\n'
-    .. get_signed_headers() .. '\n'
+    .. get_signed_headers(opts) .. '\n'
     .. digest
   return get_sha256_digest(canonical_request)
 end
