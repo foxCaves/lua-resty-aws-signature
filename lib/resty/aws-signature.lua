@@ -67,7 +67,10 @@ local function get_signed_headers(opts)
   return 'host;x-amz-content-sha256;x-amz-date'
 end
 
-local function get_sha256_digest(s)
+local function get_sha256_digest(s, is_body, opts)
+  if is_body and opts.unsigned_payload then
+    return "UNSIGNED-PAYLOAD"
+  end
   local h = resty_sha256:new()
   h:update(s or '')
   return str.to_hex(h:final())
@@ -82,7 +85,8 @@ local function get_hashed_canonical_request(timestamp, host, path, query, opts)
   if method == nil then
     method = ngx.var.request_method
   end
-  local digest = get_sha256_digest(body)
+  local digest = get_sha256_digest(body, true, opts)
+
   local canonical_request = method .. '\n'
     .. path .. '\n'
     .. query .. '\n'
@@ -159,7 +163,7 @@ function INST:aws_set_headers(host, path, query, opts)
   set_header_func('authorization', auth)
   set_header_func('host', host)
   set_header_func('x-amz-date', get_iso8601_basic(timestamp))
-  set_header_func('x-amz-content-sha256', get_sha256_digest(body))
+  set_header_func('x-amz-content-sha256', get_sha256_digest(body, true, opts))
 end
 
 return _M
