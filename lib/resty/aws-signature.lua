@@ -124,14 +124,14 @@ end
 local INST = {}
 INST.__index = INST
 
-function _M.new(creds)
+function _M.new(creds, cache_get, cache_set)
   if not creds then
     creds = get_credentials()
   end
   return setmetatable({
     creds = creds,
-    key_cache = {},
-    key_cache_date = "",
+    cache_get = cache_get,
+    cache_set = cache_set,
   }, INST)
 end
 
@@ -139,16 +139,24 @@ function INST:aws_set_headers(host, path, query, opts)
   local timestamp = tonumber(ngx.time())
 
   local date = get_iso8601_basic_short(timestamp)
-  if self.key_cache_date ~= date then
-    self.key_cache = {}
-    self.key_cache_date = date
+  local key_cache_id = opts.region .. '/' .. opts.service
+
+  local derived_signing_key
+  if self.cache_get then
+    local cache_data = self.cache_get(key_cache_id)
+    if cache_data and cache_data.date == date then
+      derived_signing_key = cache_data.key
+    end
   end
 
-  local key_cache_id = opts.region .. '/' .. opts.service
-  local derived_signing_key = self.key_cache[key_cache_id]
   if not derived_signing_key then
     derived_signing_key = get_derived_signing_key(self.creds.secret_key, timestamp, opts)
-    self.key_cache[key_cache_id] = derived_signing_key
+    if self.cache_set then
+      self.cache_set(key_cache_id, {
+        key = derived_signing_key,
+        date = date,
+      })
+    end
   end
 
   local auth = get_authorization(derived_signing_key, self.creds.access_key, timestamp, host, path, query, opts)
