@@ -139,7 +139,7 @@ function INST:aws_set_headers(host, path, query, opts)
   local timestamp = tonumber(ngx.time())
 
   local date = get_iso8601_basic_short(timestamp)
-  local key_cache_id = opts.region .. '/' .. opts.service
+  local key_cache_id = opts.region .. '/' .. opts.service .. '/' .. self.creds.access_key
 
   local derived_signing_key
   if self.cache_get then
