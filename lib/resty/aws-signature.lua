@@ -17,6 +17,12 @@ limitations under the License.
 local resty_hmac = require('resty.hmac')
 local resty_sha256 = require('resty.sha256')
 local str = require('resty.string')
+local os = os
+local ngx = ngx
+local setmetatable = setmetatable
+local tonumber = tonumber
+
+setfenv(1, {})
 
 local _M = { _VERSION = '0.2.0' }
 
